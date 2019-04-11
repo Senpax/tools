@@ -29,29 +29,33 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
   			rcsFileWithCommaV=${f::-2}
   		
 			rcsFileToCheckOut=${rcsFileWithCommaV##*/}
-			echo Checking out $rcsFileToCheckOut
+			echo "Checking out $rcsFileToCheckOut"
 
 			find $RCS_DIRECTORY/.. -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
 
-				DIFF=$(diff -b $f $alreadyCheckedOutFile)
+				#rcsFileContent=$( co -p -q $f | cat )
 
+co -p -q -kk $f | diff -b -u $alreadyCheckedOutFile -
+
+				#DIFF=$( co -p -q $f | diff -b -u $alreadyCheckedOutFile - )
+				#echo -e $DIFF
+				DIFF=""
 				if [ "$DIFF" != "" ]; then
 					echo
 					echo -e "${LIGHTRED}Skipping checking out of $rcsFileToCheckOut${RESTORE}"
-					echo -e "${LIGHTRED}$f and $alreadyCheckedOutFile do not match${RESTORE}"
+					echo -e "${LIGHTRED}DO NOT MATCH: $f and $alreadyCheckedOutFile${RESTORE}"
 					echo
 				else
+					echo
 					# Go to parent directory of RCS directory, remove already checked out file, check out from the RCS directory ( fresh copy )
-					pwd
 					# ( cd $rcsDirectory/.. ; rm -f $alreadyCheckedOutFile ; co $rcsFileToCheckOut )
 				fi
 			done
 		else
+			echo
   			#rm -f $f
 		fi
 	done
-	
-	echo
 done
 
 echo 
