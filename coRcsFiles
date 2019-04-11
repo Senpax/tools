@@ -1,12 +1,57 @@
-import os
+#!/usr/bin/env bash
 
-directory = 'the/directory/you/want/to/use'
+RESTORE='\033[0m'
+YELLOW='\e[33m'
+LIGHTRED='\e[91m'
 
-for filename in os.listdir(directory):
-    if filename.endswith(".txt"):
-        f = open(filename)
-        lines = f.read()
-        print (lines[10])
-        continue
-    else:
-    continue
+RELATIVE_PATH_TO_SERVER=$1/
+SERVER=$2
+
+PATH_TO_SERVER=$RELATIVE_PATH_TO_SERVER$SERVER
+
+SEPERATOR="======================================================================="
+
+echo Scanning $PATH_TO_SERVER for RCS directories
+
+
+find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
+	echo
+	echo -e "${YELLOW}Found $RCS_DIRECTORY${RESTORE}"
+	
+	# Traverse through each RCS subdirectory
+	for f in $RCS_DIRECTORY/*
+	do
+		# Check if the file within the RCS directory has a ,v at the end
+		if [[ $f == *",v"* ]]; then
+			echo $SEPERATOR
+
+			# Remove ,v from file
+  			rcsFileWithCommaV=${f::-2}
+  		
+			rcsFileToCheckOut=${rcsFileWithCommaV##*/}
+			echo Checking out $rcsFileToCheckOut
+
+			find $RCS_DIRECTORY/.. -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
+
+				DIFF=$(diff -b $f $alreadyCheckedOutFile)
+
+				if [ "$DIFF" != "" ]; then
+					echo
+					echo -e "${LIGHTRED}Skipping checking out of $rcsFileToCheckOut${RESTORE}"
+					echo -e "${LIGHTRED}$f and $alreadyCheckedOutFile do not match${RESTORE}"
+					echo
+				else
+					# Go to parent directory of RCS directory, remove already checked out file, check out from the RCS directory ( fresh copy )
+					pwd
+					# ( cd $rcsDirectory/.. ; rm -f $alreadyCheckedOutFile ; co $rcsFileToCheckOut )
+				fi
+			done
+		else
+  			#rm -f $f
+		fi
+	done
+	
+	echo
+done
+
+echo 
