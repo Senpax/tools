@@ -17,6 +17,7 @@ RESTORE='\033[0m'
 GREEN='\e[32m'
 YELLOW='\e[33m'
 LIGHTRED='\e[91m'
+BOLD='\e[1m'
 
 #================================================
 # Paramters
@@ -24,23 +25,26 @@ LIGHTRED='\e[91m'
 RELATIVE_PATH_TO_SERVER=$1/
 SERVER=$2
 PATH_TO_SERVER=$RELATIVE_PATH_TO_SERVER$SERVER
-declare -a RCS_FILES_TO_VERIFY
+RCS_FILES_TO_VERIFY=()
 
 H1_SEPERATOR="========================================================================================================="
 H2_SEPERATOR="---------------------------------------------------------------------------------------------------------"
 
 printf "Scanning $PATH_TO_SERVER for RCS directories\n"
 
+#================================================
+# Traverse and process RCS folders and files
+#================================================
 find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 	echo
 	echo $H1_SEPERATOR
-	echo -e "${YELLOW}Found $RCS_DIRECTORY${RESTORE}"
+	printf "${BOLD}${YELLOW}Found $RCS_DIRECTORY${RESTORE}\n"
 	
 	# Traverse through each RCS subdirectory
 	for f in $RCS_DIRECTORY/*
 	do
 		echo $H2_SEPERATOR
-		printf "Preparing to chekout $f\n\n"
+		printf "${BOLD}Preparing to chekout $f${RESTORE}\n\n"
 		# Check if the file within the RCS directory has a ,v at the end
 		if [[ $f == *",v"* ]]; then
 			
@@ -48,25 +52,25 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
   			rcsFileWithoutCommaV=${f::-2}
 			rcsFileToCheckOut=${rcsFileWithoutCommaV##*/}
 
-			find $RCS_DIRECTORY/.. -maxdepth 1 -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
+			fileFound=$(find $RCS_DIRECTORY/.. -maxdepth 1 -type f -name $rcsFileToCheckOut)
+			printf "${YELLOW}Comparing\n---------\nFile in RCS: $f\nChecked out file: $fileFound ${RESTORE}\n"
 
-				printf "${YELLOW}Comparing\n---------\nFile in RCS: $f\nChecked out file: $alreadyCheckedOutFile ${RESTORE}\n"
+			DIFF=$(co -p -q -kk $f | diff -b -u -I '@(#)' -I '#.*:' $fileFound -)
 
-				DIFF=$(co -p -q -kk $f | diff -b -u -I '@(#)' -I '#.*:' $alreadyCheckedOutFile -)
+			if [ "$DIFF" != "" ]; then
+				echo "FOUND A DIFFERENCE"
+				echo ADDING $f to ARRAY
+				RCS_FILES_TO_VERIFY+=$f
 
-				if [ "$DIFF" != "" ]; then
-					RCS_FILES_TO_VERIFY+=("$f")
+				printf "${LIGHTRED}FILES DO NOT MATCH${RESTORE}\n"
+				printf "${LIGHTRED}Skipping checkout $f${RESTORE}\n\n"
+			else
+				printf "${GREEN}---------\nFILES MATCH${RESTORE}\n\n"
+				printf "Checking out $rcsFileToCheckOut from $RCS_DIRECTORY/..\n"
 
-					printf "${LIGHTRED}FILES DO NOT MATCH${RESTORE}\n"
-					printf "${LIGHTRED}Skipping $f${RESTORE}\n\n"
-				else
-					printf "${GREEN}---------\nFILES MATCH${RESTORE}\n\n"
-					printf "Checking out $rcsFileToCheckOut from $RCS_DIRECTORY/..\n"
-
-					# Go to parent directory of RCS directory, remove already checked out file, check out from the RCS directory ( fresh copy )
-					( cd $RCS_DIRECTORY/.. ; co -f $rcsFileToCheckOut )
-				fi
-			done
+				# Go to parent directory of RCS directory, remove already checked out file, check out from the RCS directory ( fresh copy )
+				( cd $RCS_DIRECTORY/.. ; co -f $rcsFileToCheckOut )
+			fi
 		else
 			printf "${LIGHTRED}Skipping: $f${RESTORE}\n" 
 			printf "${LIGHTRED}File was checked out inside of the RCS directory${RESTORE}\n"
@@ -74,12 +78,13 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 	done
 done
 
-echo $SEPERATOR
+echo $H1_SEPERATOR
+#================================================
+# Convert RCS revisions to GIT
+#================================================
 (cd $PATH_TO_SERVER; git init && ~/gitprojects/tools/rcs-fast-export/rcs-fast-export.rb . | git fast-import && git reset)
 
 
-echo ---
-printf '%s\n' "${RCS_FILES_TO_VERIFY[@]}"
-echo ---
-
-echo 
+echo $H1_SEPERATOR
+echo ${RCS_FILES_TO_VERIFY[@]}
+echo
