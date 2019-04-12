@@ -35,7 +35,7 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 
 				#rcsFileContent=$( co -p -q $f | cat )
 
-co -p -q -kk $f | diff -b -u $alreadyCheckedOutFile -
+				co -p -q -kk $f | diff -I -b -u $alreadyCheckedOutFile -
 
 				#DIFF=$( co -p -q $f | diff -b -u $alreadyCheckedOutFile - )
 				#echo -e $DIFF
