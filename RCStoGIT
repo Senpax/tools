@@ -1,40 +1,54 @@
 #!/usr/bin/env bash
+#========================================================================================
+# Description 	:	This script will iterate over a directory (server directory) 
+#					and find all the RCS directories to prepare for the migration 
+#					from RCS to GIT
+# Parameters 	:	$1 - 	Relative path to the server directory you wish to migrate
+#					$2 - 	Name of the directory (name of server) you wish to migrate
+#					$3 - 	Path to the local git repo you would like to store this
+#							directory inside
+# Usage			:	./RCStoGIT ~/path/to/server serverName ~/path/to/local/git/repo
+#========================================================================================
 
+#================================================
+# Colors
+#================================================
 RESTORE='\033[0m'
 GREEN='\e[32m'
 YELLOW='\e[33m'
 LIGHTRED='\e[91m'
 
+#================================================
+# Paramters
+#================================================
 RELATIVE_PATH_TO_SERVER=$1/
 SERVER=$2
-
 PATH_TO_SERVER=$RELATIVE_PATH_TO_SERVER$SERVER
-
 declare -a RCS_FILES_TO_VERIFY
 
-SEPERATOR="========================================================================================================="
+H1_SEPERATOR="========================================================================================================="
+H2_SEPERATOR="---------------------------------------------------------------------------------------------------------"
 
-echo Scanning $PATH_TO_SERVER for RCS directories
-
+printf "Scanning $PATH_TO_SERVER for RCS directories\n"
 
 find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 	echo
+	echo $H1_SEPERATOR
 	echo -e "${YELLOW}Found $RCS_DIRECTORY${RESTORE}"
 	
 	# Traverse through each RCS subdirectory
 	for f in $RCS_DIRECTORY/*
 	do
-		echo $SEPERATOR
+		echo $H2_SEPERATOR
+		printf "Preparing to chekout $f\n\n"
 		# Check if the file within the RCS directory has a ,v at the end
 		if [[ $f == *",v"* ]]; then
 			
 			# Remove ,v from file
   			rcsFileWithoutCommaV=${f::-2}
-  		
 			rcsFileToCheckOut=${rcsFileWithoutCommaV##*/}
-			printf "Preparing to chekout $f\n\n"
 
-			find $RCS_DIRECTORY/.. -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
+			find $RCS_DIRECTORY/.. -maxdepth 1 -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
 
 				printf "${YELLOW}Comparing\n---------\nFile in RCS: $f\nChecked out file: $alreadyCheckedOutFile ${RESTORE}\n"
 
@@ -54,11 +68,13 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 				fi
 			done
 		else
-			printf "File was checked out inside of the RCS directory\n"
+			printf "${LIGHTRED}Skipping: $f${RESTORE}\n" 
+			printf "${LIGHTRED}File was checked out inside of the RCS directory${RESTORE}\n"
 		fi
 	done
 done
 
+echo $SEPERATOR
 (cd $PATH_TO_SERVER; git init && ~/gitprojects/tools/rcs-fast-export/rcs-fast-export.rb . | git fast-import && git reset)
 
 
