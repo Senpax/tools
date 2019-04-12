@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 RESTORE='\033[0m'
+GREEN='\e[32m'
 YELLOW='\e[33m'
 LIGHTRED='\e[91m'
 
@@ -9,7 +10,9 @@ SERVER=$2
 
 PATH_TO_SERVER=$RELATIVE_PATH_TO_SERVER$SERVER
 
-SEPERATOR="======================================================================="
+declare -a RCS_FILES_TO_VERIFY
+
+SEPERATOR="========================================================================================================="
 
 echo Scanning $PATH_TO_SERVER for RCS directories
 
@@ -21,41 +24,46 @@ find $PATH_TO_SERVER -type d -name "RCS" | while read RCS_DIRECTORY; do
 	# Traverse through each RCS subdirectory
 	for f in $RCS_DIRECTORY/*
 	do
+		echo $SEPERATOR
 		# Check if the file within the RCS directory has a ,v at the end
 		if [[ $f == *",v"* ]]; then
-			echo $SEPERATOR
-
+			
 			# Remove ,v from file
-  			rcsFileWithCommaV=${f::-2}
+  			rcsFileWithoutCommaV=${f::-2}
   		
-			rcsFileToCheckOut=${rcsFileWithCommaV##*/}
-			echo "Checking out $rcsFileToCheckOut"
+			rcsFileToCheckOut=${rcsFileWithoutCommaV##*/}
+			printf "Preparing to chekout $f\n\n"
 
 			find $RCS_DIRECTORY/.. -name $rcsFileToCheckOut | while read alreadyCheckedOutFile; do
 
-				#rcsFileContent=$( co -p -q $f | cat )
+				printf "${YELLOW}Comparing\n---------\nFile in RCS: $f\nChecked out file: $alreadyCheckedOutFile ${RESTORE}\n"
 
-				co -p -q -kk $f | diff -I -b -u $alreadyCheckedOutFile -
+				DIFF=$(co -p -q -kk $f | diff -b -u -I '@(#)' -I '#.*:' $alreadyCheckedOutFile -)
 
-				#DIFF=$( co -p -q $f | diff -b -u $alreadyCheckedOutFile - )
-				#echo -e $DIFF
-				DIFF=""
 				if [ "$DIFF" != "" ]; then
-					echo
-					echo -e "${LIGHTRED}Skipping checking out of $rcsFileToCheckOut${RESTORE}"
-					echo -e "${LIGHTRED}DO NOT MATCH: $f and $alreadyCheckedOutFile${RESTORE}"
-					echo
+					RCS_FILES_TO_VERIFY+=("$f")
+
+					printf "${LIGHTRED}FILES DO NOT MATCH${RESTORE}\n"
+					printf "${LIGHTRED}Skipping $f${RESTORE}\n\n"
 				else
-					echo
+					printf "${GREEN}---------\nFILES MATCH${RESTORE}\n\n"
+					printf "Checking out $rcsFileToCheckOut from $RCS_DIRECTORY/..\n"
+
 					# Go to parent directory of RCS directory, remove already checked out file, check out from the RCS directory ( fresh copy )
-					# ( cd $rcsDirectory/.. ; rm -f $alreadyCheckedOutFile ; co $rcsFileToCheckOut )
+					( cd $RCS_DIRECTORY/.. ; co -f $rcsFileToCheckOut )
 				fi
 			done
 		else
-			echo
-  			#rm -f $f
+			printf "File was checked out inside of the RCS directory\n"
 		fi
 	done
 done
+
+(cd $PATH_TO_SERVER; git init && ~/gitprojects/tools/rcs-fast-export/rcs-fast-export.rb . | git fast-import && git reset)
+
+
+echo ---
+printf '%s\n' "${RCS_FILES_TO_VERIFY[@]}"
+echo ---
 
 echo 
